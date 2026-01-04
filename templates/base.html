@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Markdown File Server{% endblock %}</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon_filedb_orange.ico">
+    <link rel="stylesheet" href="/static/style.css?v=20250920-174530">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+</head>
+<body>
+    <header class="fixed-header {% if selected_source %}source-{{ selected_source }}{% elif source %}source-{{ source }}{% else %}source-local{% endif %}">
+        <nav>
+            {% if filename %}
+            <a href="/" class="nav-link">← List</a>
+            {% endif %}
+            {% block header_content %}{% endblock %}
+            <button id="refresh-btn" class="refresh-button">🔄 Refresh</button>
+        </nav>
+    </header>
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="page-footer">
+        {% block footer %}
+        <div class="footer-content">
+            <span class="version-info">Aigon Viewer v{{ app_version }}</span>
+            <span class="copyright">&copy; Aigon 2025-26</span>
+        </div>
+        {% endblock %}
+    </footer>
+
+    <script src="/static/app.js"></script>
+    <script>
+        // Set refresh interval from server
+        window.REFRESH_INTERVAL = {{ refresh_interval }} * 1000;
+        {% block extra_script %}{% endblock %}
+    </script>
+</body>
+</html>

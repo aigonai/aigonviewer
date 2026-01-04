@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Markdown Files - Directory Listing{% endblock %}
+
+{% block header_content %}
+<div class="viewer-controls">
+    <div class="file-header-row">
+        <span class="current-file">Aigon Viewer</span>
+        <span class="file-meta">{{ files|length }} files{% if selected_config %} in {{ selected_config }}{% endif %} ({{ selected_source|default("local") }})</span>
+    </div>
+    <div class="controls-row">
+        <div class="config-menu">
+            {% if not local_only %}
+            <select id="source-select" onchange="updateSource(this.value)">
+                <option value="local" {% if selected_source == "local" %}selected{% endif %}>📁 Local Files</option>
+                <option value="remote" {% if selected_source == "remote" %}selected{% endif %}>🌐 Remote Files</option>
+            </select>
+            {% endif %}
+
+            {% if configurations|length > 0 %}
+            <select id="config-select" onchange="updateConfig(this.value)">
+                <option value="" {% if not selected_config %}selected{% endif %}>All Files</option>
+                {% for config_name in configurations.keys() %}
+                <option value="{{ config_name|urlencode }}"
+                        {% if selected_config == config_name %}selected{% endif %}>
+                    {{ config_name }}
+                </option>
+                {% endfor %}
+            </select>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="file-list">
+    <table class="file-table">
+        <thead>
+            <tr>
+                <th>File Name</th>
+                <th>Size</th>
+                <th>Last Modified</th>
+            </tr>
+        </thead>
+        <tbody id="file-list-body">
+            {% for file in files %}
+            <tr class="file-row {% if file.is_configured %}configured{% else %}unconfigured{% endif %}"
+                data-filename="{{ file.name }}" data-modified="{{ file.modified }}">
+                <td class="file-name">
+                    <a href="/view/{{ file.name }}?source={{ selected_source|default('local') }}">📄 {{ file.name }}</a>
+                    {% if file.configurations %}
+                    <span class="file-configs">
+                        {% for config in file.configurations %}
+                        <a href="/?config={{ config|urlencode }}&source={{ selected_source|default('local') }}" class="config-tag">{{ config }}</a>
+                        {% endfor %}
+                    </span>
+                    {% endif %}
+                    {% if file.has_remote and not local_only %}
+                    <span class="remote-indicator">🌐</span>
+                    {% endif %}
+                </td>
+                <td class="file-size">{{ file.size_human }}</td>
+                <td class="file-modified">{{ file.modified_human }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if not files %}
+    <div class="no-files">
+        <p>No markdown files found in the parent directory.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_script %}
+// Store initial file states
+window.fileStates = {};
+document.querySelectorAll('.file-row').forEach(row => {
+    const filename = row.dataset.filename;
+    const modified = parseFloat(row.dataset.modified);
+    window.fileStates[filename] = modified;
+});
+
+// Source and config update functions
+function updateSource(source) {
+    const currentConfig = new URLSearchParams(window.location.search).get('config') || '';
+    let url = '/?source=' + source;
+    if (currentConfig) {
+        url += '&config=' + encodeURIComponent(currentConfig);
+    }
+    window.location.href = url;
+}
+
+function updateConfig(config) {
+    const currentSource = new URLSearchParams(window.location.search).get('source') || 'local';
+    let url = '/?source=' + currentSource;
+    if (config) {
+        url += '&config=' + encodeURIComponent(config);
+    }
+    window.location.href = url;
+}
+
+// Index page refresh function
+window.refreshIndex = async function() {
+    try {
+        const response = await fetch('/api/files');
+        const files = await response.json();
+
+        // Check if any files have changed
+        let hasChanges = false;
+        for (const file of files) {
+            if (window.fileStates[file.name] !== file.modified) {
+                hasChanges = true;
+                break;
+            }
+        }
+
+        // If there are changes, reload the page
+        if (hasChanges) {
+            window.location.reload();
+        }
+    } catch (error) {
+        console.error('Error checking for updates:', error);
+    }
+};
+
+// Set up auto-refresh for index
+if (window.setupAutoRefresh) {
+    window.setupAutoRefresh(window.refreshIndex);
+}
+{% endblock %}

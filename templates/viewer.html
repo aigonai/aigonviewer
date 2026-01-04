@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}{{ filename }} - Markdown Viewer{% endblock %}
+
+{% block header_content %}
+<div class="file-info-stack">
+    <span class="current-file">{{ filename }}</span>
+    <span class="file-meta">{{ file_info.size_human }} | {{ file_info.modified_human }}{% if not local_only %} ({{ source|default("local") }}{% if version %} v{{ version }}{% endif %}){% endif %}</span>
+</div>
+<button id="copy-html-btn" class="copy-btn" title="Copy HTML content" onclick="copyHtmlContent()">HTML</button>
+<button id="copy-markdown-btn" class="copy-btn" title="Copy Markdown source" onclick="copyMarkdownContent()">Markdown</button>
+{% endblock %}
+
+{% block content %}
+<div class="markdown-content" id="markdown-content">
+    {{ content|safe }}
+</div>
+
+{% if toc_headings %}
+<div id="table-of-contents" class="toc-container" style="display: block;">
+    <div class="toc-header">
+        <span class="toc-title">📑 Contents</span>
+        <button id="toc-toggle" class="toc-toggle" title="Toggle Table of Contents">−</button>
+    </div>
+    <nav id="toc-nav" class="toc-nav">
+        {% for heading in toc_headings %}
+        <a href="#{{ heading.id }}" class="toc-link toc-level-h{{ heading.level }}">{{ heading.text }}</a>
+        {% endfor %}
+    </nav>
+</div>
+{% endif %}
+
+{% if yaml_meta %}
+<div id="yaml-metadata" class="yaml-container" style="display: block;">
+    <div class="yaml-header">
+        <span class="yaml-title">📋 Frontmatter</span>
+        <button id="yaml-toggle" class="yaml-toggle" title="Toggle YAML Frontmatter">+</button>
+    </div>
+    <div id="yaml-content" class="yaml-content" style="display: none;">
+        {% for key, value in yaml_meta.items() %}
+        <div class="yaml-item">
+            <strong>{{ key }}:</strong>
+            {% if value is sequence and value is not string %}
+                {% for item in value %}
+                    <span class="yaml-value">{{ item }}</span>{% if not loop.last %}, {% endif %}
+                {% endfor %}
+            {% else %}
+                <span class="yaml-value">{{ value }}</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_script %}
+// Store current file state
+window.currentFile = {
+    name: "{{ filename }}",
+    modified: {{ file_info.modified }},
+    source: "{{ source|default('local') }}",
+    version: {% if version %}{{ version }}{% else %}null{% endif %}
+};
+
+// jQuery-based copy functions
+$(document).ready(function() {
+    window.copyHtmlContent = async function() {
+        console.log('copyHtmlContent called');
+        const $btn = $('#copy-html-btn');
+
+        try {
+            const url = `/api/file/${window.currentFile.name}/html?source=${window.currentFile.source}${window.currentFile.version ? '&version=' + window.currentFile.version : ''}`;
+            const response = await fetch(url);
+
+            if (!response.ok) throw new Error('Failed to fetch HTML content');
+
+            const data = await response.json();
+            // Combine front matter table and content HTML with comment separators
+            const combinedHtml =
+                '<!-- Front Matter -->\n' +
+                data.frontmatter_html + '\n\n' +
+                '<!-- Document -->\n' +
+                data.content_html;
+            await navigator.clipboard.writeText(combinedHtml);
+
+            const originalText = $btn.text();
+            $btn.text('✅ Copied!').css('background', '#28a745');
+
+            setTimeout(() => {
+                $btn.text(originalText).css('background', '');
+            }, 2000);
+        } catch (err) {
+            console.error('Failed to copy HTML:', err);
+            $btn.text('❌ Failed');
+            setTimeout(() => $btn.text('HTML'), 2000);
+        }
+    };
+
+    window.copyMarkdownContent = async function() {
+        console.log('copyMarkdownContent called');
+        const $btn = $('#copy-markdown-btn');
+
+        try {
+            const url = `/api/file/${window.currentFile.name}/markdown?source=${window.currentFile.source}${window.currentFile.version ? '&version=' + window.currentFile.version : ''}`;
+            const response = await fetch(url);
+
+            if (!response.ok) throw new Error('Failed to fetch markdown content');
+
+            const data = await response.json();
+            await navigator.clipboard.writeText(data.markdown);
+
+            const originalText = $btn.text();
+            $btn.text('✅ Copied!').css('background', '#28a745');
+
+            setTimeout(() => {
+                $btn.text(originalText).css('background', '');
+            }, 2000);
+        } catch (err) {
+            console.error('Failed to copy Markdown:', err);
+            $btn.text('❌ Failed');
+            setTimeout(() => $btn.text('Markdown'), 2000);
+        }
+    };
+});
+
+// Version change function
+function changeVersion(newVersion) {
+    const currentUrl = new URL(window.location);
+    if (newVersion && newVersion !== '') {
+        currentUrl.searchParams.set('version', newVersion);
+    } else {
+        currentUrl.searchParams.delete('version');
+    }
+    window.location.href = currentUrl.toString();
+}
+
+// Viewer page refresh function
+window.refreshViewer = async function() {
+    try {
+        const response = await fetch(`/api/file/${window.currentFile.name}/info`);
+        const fileInfo = await response.json();
+
+        // Check if file has changed
+        if (fileInfo.modified !== window.currentFile.modified) {
+            // Fetch new content with source parameter
+            const contentResponse = await fetch(`/api/file/${window.currentFile.name}/content?source=${window.currentFile.source}`);
+            const contentData = await contentResponse.json();
+
+            // Update the content
+            document.getElementById('markdown-content').innerHTML = contentData.html;
+
+            // Update the stored state
+            window.currentFile.modified = fileInfo.modified;
+
+            // Update the header metadata
+            document.querySelector('.file-meta').textContent =
+                `${fileInfo.size_human} | ${fileInfo.modified_human}`;
+
+            // Flash indication that content was updated
+            const content = document.getElementById('markdown-content');
+            content.style.animation = 'contentUpdate 0.5s';
+            setTimeout(() => {
+                content.style.animation = '';
+            }, 500);
+
+            // Re-style note references after content update
+            if (window.styleNoteReferences) {
+                window.styleNoteReferences();
+            }
+
+            // Re-add copy buttons after content update
+            if (window.addCopyButtons) {
+                window.addCopyButtons();
+            }
+
+            // Re-generate table of contents after content update
+            if (window.generateTableOfContents) {
+                window.generateTableOfContents();
+            }
+
+            // Re-initialize Mermaid diagrams after content update
+            if (typeof mermaid !== 'undefined') {
+                mermaid.init(undefined, document.querySelectorAll('.mermaid'));
+            }
+
+            // Re-add copy button functionality after content update
+            if (window.setupCopyButtons) {
+                window.setupCopyButtons();
+            }
+        }
+    } catch (error) {
+        console.error('Error checking for updates:', error);
+    }
+};
+
+// Set up auto-refresh for viewer
+if (window.setupAutoRefresh) {
+    window.setupAutoRefresh(window.refreshViewer);
+}
+
+
+// TOC functionality with jQuery
+$(document).ready(function() {
+    $('#toc-toggle').on('click', function() {
+        const $tocNav = $('#toc-nav');
+        const $tocContainer = $('#table-of-contents');
+        const isVisible = $tocNav.is(':visible');
+
+        if (isVisible) {
+            $tocNav.hide();
+            $(this).text('+');
+            $tocContainer.addClass('collapsed');
+        } else {
+            $tocNav.show();
+            $(this).text('−');
+            $tocContainer.removeClass('collapsed');
+        }
+    });
+
+    // YAML metadata toggle functionality with dynamic TOC positioning
+    function updateTocPosition() {
+        const $yamlContainer = $('#yaml-metadata');
+        const $tocContainer = $('#table-of-contents');
+
+        if ($yamlContainer.length && $tocContainer.length) {
+            const yamlHeight = $yamlContainer.outerHeight();
+            const newTocTop = 140 + yamlHeight + 15; // 15px spacing
+            $tocContainer.css('top', newTocTop + 'px');
+        }
+    }
+
+    $('#yaml-toggle').on('click', function() {
+        const $yamlContent = $('#yaml-content');
+        const $yamlContainer = $('#yaml-metadata');
+        const isVisible = $yamlContent.is(':visible');
+
+        if (isVisible) {
+            $yamlContent.hide();
+            $(this).text('+');
+            $yamlContainer.addClass('collapsed');
+        } else {
+            $yamlContent.show();
+            $(this).text('−');
+            $yamlContainer.removeClass('collapsed');
+        }
+
+        // Update TOC position after animation
+        setTimeout(updateTocPosition, 50);
+    });
+
+    // Initial positioning
+    $(document).ready(function() {
+        updateTocPosition();
+    });
+
+    // Smooth scroll for TOC links
+    $('.toc-link').on('click', function(e) {
+        e.preventDefault();
+        const targetId = $(this).attr('href').substring(1);
+        const $target = $('#' + targetId);
+
+        if ($target.length) {
+            $target[0].scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+
+            $target.addClass('toc-highlight');
+            setTimeout(() => $target.removeClass('toc-highlight'), 2000);
+        }
+    });
+
+    // Legacy setupCopyButtons function for refresh compatibility
+    window.setupCopyButtons = function() {
+        console.log('setupCopyButtons called - using onclick handlers');
+    };
+});
+{% endblock %}
