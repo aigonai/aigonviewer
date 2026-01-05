@@ -166,6 +166,34 @@ def process_mermaid_blocks(content: str) -> str:
 
     return re.sub(pattern, replace_mermaid, content, flags=re.DOTALL)
 
+def ensure_list_newlines(content: str) -> str:
+    """Ensure lists have blank lines before them for proper markdown rendering
+
+    Adds a blank line before:
+    - Unordered lists (lines starting with -, *, +)
+    - Ordered lists (lines starting with digit(s) followed by . or ))
+
+    But only if the previous line is not already blank and not part of a list.
+    """
+    import re
+
+    lines = content.split('\n')
+    result = []
+
+    for i, line in enumerate(lines):
+        # Check if current line starts a list
+        is_list_start = bool(re.match(r'^\s*[-*+]\s+', line) or re.match(r'^\s*\d+[.)]\s+', line))
+
+        if is_list_start and i > 0:
+            prev_line = lines[i-1].strip()
+            # Add blank line if previous line is not blank and not a list item
+            if prev_line and not re.match(r'^[-*+]\s+', prev_line) and not re.match(r'^\d+[.)]\s+', prev_line):
+                result.append('')  # Add blank line
+
+        result.append(line)
+
+    return '\n'.join(result)
+
 def yaml_meta_to_html_table(yaml_meta: dict) -> str:
     """Convert YAML front matter to HTML table
 
@@ -651,6 +679,9 @@ async def view_file(request: Request, filename: str, source: str = "local", vers
             # Fallback to empty if PyYAML not available or parsing fails
             yaml_meta = {}
 
+    # Ensure lists have proper blank lines before them
+    content = ensure_list_newlines(content)
+
     # Process mermaid blocks before markdown conversion
     content = process_mermaid_blocks(content)
 
@@ -750,6 +781,9 @@ async def api_file_content(filename: str, source: str = "local"):
         if content is None:
             raise HTTPException(status_code=404, detail="Could not fetch remote file")
 
+        # Ensure lists have proper blank lines before them
+        content = ensure_list_newlines(content)
+
         # Process mermaid blocks before markdown conversion
         content = process_mermaid_blocks(content)
 
@@ -772,6 +806,9 @@ async def api_file_content(filename: str, source: str = "local"):
         # Read file content
         async with aiofiles.open(filepath, 'r', encoding='utf-8') as f:
             content = await f.read()
+
+        # Ensure lists have proper blank lines before them
+        content = ensure_list_newlines(content)
 
         # Process mermaid blocks before markdown conversion
         content = process_mermaid_blocks(content)
@@ -882,6 +919,9 @@ async def api_file_html(filename: str, source: str = "local", version: Optional[
 
     # Generate front matter HTML table
     frontmatter_html = yaml_meta_to_html_table(yaml_meta)
+
+    # Ensure lists have proper blank lines before them
+    content = ensure_list_newlines(content)
 
     # Process mermaid blocks before markdown conversion
     content = process_mermaid_blocks(content)

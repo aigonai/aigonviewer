@@ -12,24 +12,6 @@
 {% endblock %}
 
 {% block content %}
-<div class="markdown-content" id="markdown-content">
-    {{ content|safe }}
-</div>
-
-{% if toc_headings %}
-<div id="table-of-contents" class="toc-container" style="display: block;">
-    <div class="toc-header">
-        <span class="toc-title">📑 Contents</span>
-        <button id="toc-toggle" class="toc-toggle" title="Toggle Table of Contents">−</button>
-    </div>
-    <nav id="toc-nav" class="toc-nav">
-        {% for heading in toc_headings %}
-        <a href="#{{ heading.id }}" class="toc-link toc-level-h{{ heading.level }}">{{ heading.text }}</a>
-        {% endfor %}
-    </nav>
-</div>
-{% endif %}
-
 {% if yaml_meta %}
 <div id="yaml-metadata" class="yaml-container" style="display: block;">
     <div class="yaml-header">
@@ -50,6 +32,24 @@
         </div>
         {% endfor %}
     </div>
+</div>
+{% endif %}
+
+<div class="markdown-content" id="markdown-content">
+    {{ content|safe }}
+</div>
+
+{% if toc_headings %}
+<div id="table-of-contents" class="toc-container" style="display: block;">
+    <div class="toc-header">
+        <span class="toc-title">📑 Contents</span>
+        <button id="toc-toggle" class="toc-toggle" title="Toggle Table of Contents">−</button>
+    </div>
+    <nav id="toc-nav" class="toc-nav">
+        {% for heading in toc_headings %}
+        <a href="#{{ heading.id }}" class="toc-link toc-level-h{{ heading.level }}">{{ heading.text }}</a>
+        {% endfor %}
+    </nav>
 </div>
 {% endif %}
 {% endblock %}
@@ -218,18 +218,7 @@ $(document).ready(function() {
         }
     });
 
-    // YAML metadata toggle functionality with dynamic TOC positioning
-    function updateTocPosition() {
-        const $yamlContainer = $('#yaml-metadata');
-        const $tocContainer = $('#table-of-contents');
-
-        if ($yamlContainer.length && $tocContainer.length) {
-            const yamlHeight = $yamlContainer.outerHeight();
-            const newTocTop = 140 + yamlHeight + 15; // 15px spacing
-            $tocContainer.css('top', newTocTop + 'px');
-        }
-    }
-
+    // YAML metadata toggle functionality
     $('#yaml-toggle').on('click', function() {
         const $yamlContent = $('#yaml-content');
         const $yamlContainer = $('#yaml-metadata');
@@ -244,14 +233,6 @@ $(document).ready(function() {
             $(this).text('−');
             $yamlContainer.removeClass('collapsed');
         }
-
-        // Update TOC position after animation
-        setTimeout(updateTocPosition, 50);
-    });
-
-    // Initial positioning
-    $(document).ready(function() {
-        updateTocPosition();
     });
 
     // Smooth scroll for TOC links

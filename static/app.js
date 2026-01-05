@@ -156,9 +156,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         textNodes.forEach(textNode => {
             const text = textNode.textContent;
-            const pattern = /\[([a-z0-9]{2,6})\]/gi;
+            // Match both single IDs [abc1] and comma-separated IDs [abc1,def2,ghi3]
+            const pattern = /\[([a-z0-9]{2,6}(?:,[a-z0-9]{2,6})*)\]/gi;
             if (pattern.test(text)) {
-                const newHTML = text.replace(/\[([a-z0-9]{2,6})\]/gi,
+                const newHTML = text.replace(/\[([a-z0-9]{2,6}(?:,[a-z0-9]{2,6})*)\]/gi,
                     '<span class="inline-note-ref">[$1]</span>');
                 const wrapper = document.createElement('span');
                 wrapper.innerHTML = newHTML;

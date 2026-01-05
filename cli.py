@@ -83,13 +83,18 @@ For simple server execution without process management, use:
     launch_parser.add_argument(
         '--remote', '-r',
         action='store_true',
-        default=True,
-        help='Enable remote sources (Aigon API, remote URLs) - enabled by default'
+        default=False,
+        help='Enable remote sources (Aigon API, remote URLs)'
+    )
+    launch_parser.add_argument(
+        '--local', '-l',
+        action='store_true',
+        help='Force local-only mode (overrides --remote)'
     )
     launch_parser.add_argument(
         '--no-remote',
         action='store_true',
-        help='Disable remote sources (local files only)'
+        help='Disable remote sources (local files only, alias for --local)'
     )
     launch_parser.add_argument(
         '--no-browser',
@@ -140,7 +145,7 @@ For simple server execution without process management, use:
     if args.assert_version:
         if args.assert_version != __version__:
             print(f"Version mismatch: installed={__version__}, expected={args.assert_version}", file=sys.stderr)
-            sys.exit(2)  # Exit code 2 indicates version mismatch
+            sys.exit(3)  # Exit code 3 indicates version mismatch (not 2, which is used by argparse)
         # Version matches, continue normally
 
     # Default to launch if no command specified
@@ -151,14 +156,20 @@ For simple server execution without process management, use:
         args.port = 4444
         args.host = '127.0.0.1'
         args.foreground = False
-        args.remote = True
+        args.remote = False
+        args.local = False
         args.no_remote = False
         args.no_browser = False
 
     # Route to appropriate handler
     if args.command == 'launch':
-        # Handle remote flag
-        remote = args.remote and not args.no_remote
+        # Handle remote flag - --local overrides --remote
+        if hasattr(args, 'local') and args.local:
+            remote = False
+        elif hasattr(args, 'no_remote') and args.no_remote:
+            remote = False
+        else:
+            remote = args.remote
 
         result = launch_server(
             directory=args.directory,
